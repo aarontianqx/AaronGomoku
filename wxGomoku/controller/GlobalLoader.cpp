@@ -7,6 +7,8 @@
 
 #include "GlobalLoader.h"
 
+wxJPEGHandler GlobalLoader::jpeg_handler;
+wxPNGHandler GlobalLoader::png_handler;
 std::map<std::string, int32_t> GlobalLoader::configs;
 std::map<std::string, wxBitmap*> GlobalLoader::pictures;
 
@@ -95,6 +97,8 @@ void GlobalLoader::loadConfig()
 
 void GlobalLoader::loadPic()
 {
+    wxImage::AddHandler(&jpeg_handler);
+    wxImage::AddHandler(&png_handler);
     pictures["GomokuBoard"] = new wxBitmap(wxString("resource/board.jpg"), wxBITMAP_TYPE_JPEG);
     pictures["BlackPiece"] = new wxBitmap(wxString("resource/black.png"), wxBITMAP_TYPE_PNG);
     pictures["WhitePiece"] = new wxBitmap(wxString("resource/white.png"), wxBITMAP_TYPE_PNG);

@@ -10,45 +10,18 @@
 
 #include <stdint.h>
 #include <time.h>
-#include <sys/time.h>
-#include <stdexcept>
 
-inline
-uint64_t time_diff(timespec start, timespec stop)
-{
-    return (stop.tv_sec - start.tv_sec) * 1000000 + (stop.tv_nsec - start.tv_nsec) / 1000;
-}
 
-inline
-uint64_t time_diff(timeval start, timeval stop)
-{
-    return (stop.tv_sec - start.tv_sec) * 1000000 + (stop.tv_usec - start.tv_usec);
-}
-
-inline
-void read_time(timespec &_clock)
-{
-    clock_gettime(CLOCK_MONOTONIC, &_clock);
-}
-
-inline
-void read_time(timeval &_clock)
-{
-    gettimeofday(&_clock, NULL);
-}
-
-template <class _TimeType>
-class BaseCalculagraph
+class Calculagraph
 {
 public:
     enum CalculagraphState{ RUNNING, PAUSED, STOP, TERMINATED };
-    typedef _TimeType TimeType;
 
-    BaseCalculagraph() { initiate(); }
+    Calculagraph() { initiate(); }
 
     CalculagraphState getState() const
     {
-        return state();
+        return state;
     }
 
     void initiate()
@@ -66,17 +39,15 @@ public:
                 return true;
             case STOP:
                 state = RUNNING;
-                read_time(start);
+                start = getCurrent();
                 return true;
             case TERMINATED:
                 state = RUNNING;
                 duration = 0;
-                read_time(start);
+                start = getCurrent();
                 return true;
-            case RUNNING:
+            default: // RUNNING
                 return false;
-            default:
-                throw std::logic_error("toggle start error");
         }
     }
 
@@ -86,9 +57,8 @@ public:
         {
             case RUNNING:
                 state = PAUSED;
-                read_time(stop);
-                duration += time_diff(start, stop);
-                start = stop;
+                duration += getCurrent() - start;
+                start += duration;
                 return true;
             default:
                 return false;
@@ -100,7 +70,7 @@ public:
         switch (state)
         {
             case STOP:
-                read_time(start);
+                start = getCurrent();
             case PAUSED:
                 state = RUNNING;
                 return true;
@@ -115,21 +85,18 @@ public:
         {
             case RUNNING:
                 state = PAUSED;
-                read_time(stop);
-                duration += time_diff(start, stop);
-                start = stop;
+                duration += getCurrent() - start;
+                start += duration;
                 return true;
             case PAUSED:
                 state = RUNNING;
                 return true;
             case STOP:
                 state = RUNNING;
-                read_time(start);
+                start = getCurrent();
                 return true;
-            case TERMINATED:
+            default: // TERMINATED
                 return false;
-            default:
-                throw std::logic_error("toggle pause/continue error");
         }
     }
 
@@ -139,21 +106,17 @@ public:
         {
             case RUNNING:
                 state = STOP;
-                read_time(stop);
-                duration += time_diff(start, stop);
+                duration += getCurrent() - start;
                 return true;
             case PAUSED:
                 state = TERMINATED;
-                read_time(stop);
-                duration += time_diff(start, stop);
+                duration += getCurrent() - start;
                 return true;
             case STOP:
                 state = TERMINATED;
                 return true;
-            case TERMINATED:
+            default: // TERMINATED:
                 return false;
-            default:
-                throw std::logic_error("toggle stop error");
         }
     }
 
@@ -168,6 +131,13 @@ public:
     }
 
 protected:
+    uint64_t getCurrent() const
+    {
+        timespec current;
+        timespec_get(&current, TIME_UTC);
+        return current.tv_sec * 1000000 + current.tv_nsec / 1000;
+    }
+
     uint64_t getDuration() const
     {
         switch (state)
@@ -175,23 +145,17 @@ protected:
             case PAUSED:
             case STOP:
                 return duration;
-            case TERMINATED:
-                return 0;
             case RUNNING:
-                read_time(stop);
-                return duration + time_diff(start, stop);
-            default:
-                throw std::logic_error("getting duration error");
+                return duration + getCurrent() - start;
+            default: // TERMINATED
+                return 0;
         }
     }
 private:
-    TimeType start;
-    mutable TimeType stop;
+    uint64_t start;
     CalculagraphState state;
     uint64_t duration;
 };
-
-typedef BaseCalculagraph<timespec> Calculagraph;
 
 
 

@@ -7,34 +7,30 @@
 
 
 #include "GomokuAI.h"
-#include "wxGomokuEvents.h"
-#include "wxGomokuMain.h"
+
 #include <algorithm>
 #include <random>
 #include <string>
 
-#include "Calculagraph.hpp"
+static const int PATTERN_WIN = 0;
+static const int PATTERN_L4 = 1;
+static const int PATTERN_S4 = 2;
+static const int PATTERN_CL3 = 3;
+static const int PATTERN_JL3 = 4;
+static const int PATTERN_S3 = 5;
+static const int PATTERN_L2 = 6;
+static const int PATTERN_S2A = 7;
+static const int PATTERN_S2B = 8;
+static const int PATTERN_S2C = 9;
+static const int PATTERN_ONE = 10;
+static const int PATTERN_NONE = 11;
 
-class PieceScore
-{
-public:
-    PiecePosition pos;
-    int score;
+static const int PATTERN_D44 = 12;
+static const int PATTERN_D43 = 13;
+static const int PATTERN_D33 = 14;
+static const int PATTERN_ML2 = 15;
 
-    PieceScore(PiecePosition _pos=PiecePosition::InvalidPiece, int _score=0)
-        : pos(_pos), score(_score)
-    {}
 
-    bool operator <(const PieceScore& r) const
-    {
-        return score < r.score;
-    }
-
-    bool operator >(const PieceScore& r) const
-    {
-        return score > r.score;
-    }
-};
 const char *PatternName[16]{
     "WIN", "L4", "S4", "CL3",
     "JL3", "S3", "L2", "S2A",
@@ -43,10 +39,10 @@ const char *PatternName[16]{
 };
 
 const int PatternScore[16]{
-    10000000, 300000,3000, 2500,
-    1500, 600, 700, 300,
-    200, 100, 10, 0,
-    300000, 200000, 100000, 300
+    15000, 6000, 500, 400,
+    300, 120, 150, 60,
+    40, 20, 5, 0,
+    6000, 4000, 2000, 60
 };
 
 const uint64_t PatternMap[411]{
@@ -157,89 +153,43 @@ const uint64_t PatternMap[411]{
 
 std::random_device rd;
 
-GomokuAI::GomokuAI(wxGomokuFrame *_frame, GomokuBoard *_board, GomokuGame *_game, int _difficulty)
-    :  main_frame(_frame), gomoku_board(_board), gomoku_game(_game), difficulty(_difficulty)
+GomokuAI::GomokuAI(GomokuBoard *board, int difficulty)
+    : gomoku_board(board)
 {
-    m.Lock();
-    cond = new wxCondition(m);
-}
-
-void GomokuAI::initiate(GomokuBoard *_board, GomokuGame *_game)
-{
-    assert(_board != nullptr && _game != nullptr);
-    gomoku_board = _board;
-    gomoku_game = _game;
-}
-
-void GomokuAI::setDifficulty(int _difficulty)
-{
-    difficulty = _difficulty;
-}
-
-void GomokuAI::WakeUp()
-{
-    cond->Signal();
-}
-
-
-GomokuAI::~GomokuAI()
-{
-    delete cond;
-}
-
-// the bot thread
-void* GomokuAI::Entry()
-{
-    Calculagraph timer;
-
-
-    while (!TestDestroy()){
-        cond->Wait();
-
-        node = 1;
-
-        timer.initiate();
-        timer.toggleStart();
-        PiecePosition best = searchBest();
-        timer.toggleStop();
-
-        wxAIEvent play_event(best, EVT_BOT_PLAY);
-        play_event.setInfo(timer.get_msec(), node);
-
-        main_frame->GetEventHandler()->ProcessThreadEvent(play_event);
-
-    }
-    Exit(0);
+    max_depth = std::min(difficulty * 2, 224 - gomoku_board->pieceCount());
+    max_depth = std::min(max_depth, gomoku_board->pieceCount() + 2);
+    if (max_depth % 2 == 1)
+        max_depth--;
 }
 
 // evaluate a point with a specific color on a certain direction
-int getLinePattern(GomokuBoard *board, PiecePosition pos, Direction dir, PieceColor color)
+int getLinePattern(GomokuBoard *board, PiecePosition pos, uint8_t direction, PieceColor color)
 {
     assert(pos.isLegal());
     assert(board->at(pos) != color.opponent());
     // passed the piece '1' at index 4
     std::string pattern("22222222");
     int l = 3, r = 4;
-    for(auto tmp=pos.adjacent(dir); tmp.isLegal() && r < 8; tmp.move(dir), r++){
+    for(auto tmp=pos+direction; r < 8; tmp+=direction, r++){
         PieceColor tc = board->at(tmp);
         if (tc == color)
             pattern[r] = '1';
         else if (tc.isBlank())
             pattern[r] = '0';
-        else
+        else  // illegal position or opponent color
             break;
     }
-    Direction opdir = opponentDir(dir);
-    for (auto tmp=pos.adjacent(opdir); tmp.isLegal() && l >= 0; tmp.move(opdir), l--){
+    for (auto tmp=pos-direction; l >= 0; tmp-=direction, l--){
         PieceColor tc = board->at(tmp);
         if (tc == color)
             pattern[l] = '1';
         else if (tc.isBlank())
             pattern[l] = '0';
-        else
+        else  // illegal position or opponent color
             break;
     }
 
+    // improve performance by looking up table
     int ternary = pattern[7] - '0';
     for (int i=6; i>=0; i--)
         ternary = ternary * 3 + pattern[i] - '0';
@@ -254,10 +204,10 @@ int evalSpec(GomokuBoard *board, PiecePosition pos, PieceColor color)
 {
     int score = 0;
     int pattern[4]{
-        getLinePattern(board, pos, RIGHT, color),
-        getLinePattern(board, pos, DOWN, color),
-        getLinePattern(board, pos, RIGHTUP, color),
-        getLinePattern(board, pos, RIGHTDOWN, color)
+        getLinePattern(board, pos, PiecePosition::Right, color),
+        getLinePattern(board, pos, PiecePosition::Down, color),
+        getLinePattern(board, pos, PiecePosition::RightUp, color),
+        getLinePattern(board, pos, PiecePosition::RightDown, color)
     };
     std::sort(pattern, pattern+4);
     if (pattern[1] <= PATTERN_S4)
@@ -289,55 +239,56 @@ int evaluate(GomokuBoard *board, PiecePosition pos)
 }
 
 // evaluate the whole situation (for leaf node)
-int evaluateSituation(GomokuBoard *board, int alpha, int beta)
+int GomokuAI::evaluateSituation(GomokuBoard *board, int alpha, int beta)
 {
-    PieceScore d_max1, d_max2, tmp;
+    PieceScore d_max1, d_max2;
+    PieceColor color = board->nextColor(), opponent_color = color.opponent();
     int best = INT_MIN;
-    for(tmp.pos.x=0; tmp.pos.x<TABLESIZE; tmp.pos.x++)
-        for(tmp.pos.y=0; tmp.pos.y<TABLESIZE; tmp.pos.y++){
-            if (!board->at(tmp.pos).isBlank()) continue;
-            tmp.score = evalSpec(board, tmp.pos, board->nextColor().opponent());
-            tmp.score /= 2;
-            if (tmp.score > d_max2.score){
-                d_max2 = tmp;
-                if (d_max1 < d_max2)
-                    std::swap(d_max1, d_max2);
-            }
+    // evaluate each point for the opponent
+    for (PiecePosition pos: blank_points){
+        if(!board->at(pos).isBlank()) continue;
+        int score = evalSpec(board, pos, opponent_color) / 2;
+        if (score > d_max2.score){
+            d_max2.pos = pos;
+            d_max2.score = score;
+            if (d_max1.score < d_max2.score)
+                std::swap(d_max1, d_max2);
         }
-    for(tmp.pos.x=0; tmp.pos.x<TABLESIZE; tmp.pos.x++)
-        for(tmp.pos.y=0; tmp.pos.y<TABLESIZE; tmp.pos.y++){
-            if (!board->at(tmp.pos).isBlank()) continue;
-            tmp.score = evalSpec(board, tmp.pos, board->nextColor());
-            int situation = tmp.score - (tmp.pos==d_max1.pos?d_max2.score:d_max1.score);
-            if (situation > best) best = situation;
-            if (best > beta) return best;
-        }
+    }
+    // evaluate situation
+    for (PiecePosition pos: blank_points){
+        if(!board->at(pos).isBlank()) continue;
+        int score = evalSpec(board, pos, color);
+        // PointSituation = PointScore - max(OpponentPointScore except this point)
+        int situation = score - (pos == d_max1.pos?d_max2.score:d_max1.score);
+        if (situation > best) best = situation;
+        if (best > beta) return best;
+    }
     return best;
 }
 
-// generate posible points
+// generate posible points in a limit number
+// blank_points have been calculated previously
 std::vector<PieceScore>
-generatePoints(GomokuBoard *board, int ply)
+GomokuAI::generatePoints(GomokuBoard *board, uint32_t limit)
 {
     std::vector<PieceScore> v;
-    size_t maxvsize = std::max(30 - 8 * ply, 6);
-    for (int i=0; i<TABLESIZE; i++)
-        for (int j=0; j<TABLESIZE; j++)
-            if (board->at(i, j).isBlank()){
-                PiecePosition pos(i, j);
-                int value = evaluate(board, pos);
-                value += 7 - std::max(abs(7 - i), abs(7 - j));
-                if (value >= PatternScore[PATTERN_WIN]){
-                    v.clear();
-                    v.push_back(PieceScore(pos, value));
-                    return v;
-                }
+    for(PiecePosition pos: blank_points){
+        if (board->at(pos).isBlank()){
+            int value = evaluate(board, pos);
+            value += 7 - std::max(abs(7 - pos.getX()), abs(7 - pos.getY()));
+            if (value >= PatternScore[PATTERN_WIN]){
+                v.clear();
                 v.push_back(PieceScore(pos, value));
+                return v;
             }
+            v.push_back(PieceScore(pos, value));
+        }
+    }
     std::sort(v.begin(), v.end(), std::greater<PieceScore>());
-    if (v.size() > maxvsize)
-        v.resize(maxvsize);
-    return v;
+    if (v.size() > limit)
+        v.resize(limit);
+    return std::move(v);
 }
 
 // Max-Min Search with Alpha-Beta Pruning
@@ -347,7 +298,7 @@ int GomokuAI::dfSearchScore(GomokuBoard *board, int ply, int alpha, int beta)
     if ((ply & 1) == 0 && ply >= max_depth)
         return evaluateSituation(board, alpha, beta);
 
-    std::vector<PieceScore> points(generatePoints(board, ply));
+    std::vector<PieceScore> points = generatePoints(board, std::max(20 - 4 * ply, 6));
     if (points[0].score >= PatternScore[PATTERN_WIN])
         return (ply & 1) ? -points[0].score : points[0].score;
     int best = (ply & 1)?INT_MAX:INT_MIN;
@@ -370,17 +321,13 @@ int GomokuAI::dfSearchScore(GomokuBoard *board, int ply, int alpha, int beta)
 }
 
 // The entrance of search method
-PiecePosition GomokuAI::searchBest()
+PiecePosition GomokuAI::operator()(uint32_t& _node)
 {
-    assert(gomoku_game->isActive() && gomoku_board->pieceCount() < TABLESIZE * TABLESIZE);
-    std::vector<PieceScore> points(generatePoints(gomoku_board, 0));
+    assert(gomoku_board->pieceCount() < 225);
+    blank_points = gomoku_board->blankPoints();
+    std::vector<PieceScore> points = generatePoints(gomoku_board, 20);
 
-    max_depth = std::min(difficulty * 2, TABLESIZE*TABLESIZE-gomoku_board->pieceCount()-1);
-    if (max_depth % 2 == 1)
-        max_depth--;
-    if (gomoku_board->pieceCount() < 6)
-        max_depth = (gomoku_board->pieceCount() <2?2:4);
-
+    node = 1;
     int best = INT_MIN;
     if (max_depth > 1){
         GomokuBoard board(*gomoku_board);
@@ -393,13 +340,16 @@ PiecePosition GomokuAI::searchBest()
             if (point.score > best)
                 best = point.score;
         }
-        if (best < 0)
+        if (best < 0){
+            _node = node;
             return points[0].pos;
+        }
     }
     std::sort(points.begin(), points.end(), std::greater<PieceScore>());
     size_t count;
     int base_score = int(0.9 * points[0].score);
     for (count=1; count<points.size() && points[count].score >= base_score; count++);
+    _node = node;
     return points[rd() % count].pos;
 }
 
@@ -493,8 +443,10 @@ void make_pattern()
 }
 */
 
-
-/* getLinePattern backup
+/*
+// getLinePattern backup
+int getLinePattern(GomokuBoard *board, PiecePosition pos, Direction dir, PieceColor color)
+{
     std::string pattern("222212222");
     int l = 3, r = 5;
     for(auto tmp=pos.adjacent(dir); tmp.isLegal() && r < 9; tmp.move(dir), r++){
@@ -542,22 +494,11 @@ void make_pattern()
     l -= tl, r -= tl;
     pattern = pattern.substr(tl, tr - tl);
     if (count == 4){
-        if (r - l == 3){
-            if (l>0 && r<pattern.size()-1)
-                // 011110
-                return PATTERN_L4;
-            else
-                // 11110
-                return PATTERN_S4A;
-        }
-        else{   // r - l = 4
-            if (pattern[l+2] =='0')
-                // 11011
-                return PATTERN_S4C;
-            else
-                // 10111
-                return PATTERN_S4B;
-        }
+        if (r - l == 3 && l > 0 && r < pattern.size()-1)
+            // 011110
+            return PATTERN_L4;
+        else
+            return PATTERN_S4;
     }
     if (count == 3){
         switch (pattern.size())
@@ -584,4 +525,5 @@ void make_pattern()
         }
     }
     return PATTERN_ONE;
+}
 */

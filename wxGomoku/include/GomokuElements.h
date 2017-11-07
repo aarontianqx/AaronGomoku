@@ -8,6 +8,7 @@
 #ifndef GOMOKUELEMENTS_H_INCLUDED
 #define GOMOKUELEMENTS_H_INCLUDED
 
+#include <stdint.h>
 #include "gomoku_global.h"
 
 class PieceColor
@@ -73,8 +74,8 @@ public:
         return isLegal()?(x!=r.x || y!=r.y):r.isLegal();
     }
 
-    short x;
-    short y;
+    int8_t x;
+    int8_t y;
 
     static const PiecePosition InvalidPiece;
 };

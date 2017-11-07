@@ -12,48 +12,48 @@
 #include <vector>
 #include <wx/thread.h>
 
-class wxGomokuFrame;
+class PieceScore
+{
+public:
+    PiecePosition pos;
+    short score;
 
-class GomokuAI: public wxThread
+    PieceScore(PiecePosition _pos=PiecePosition::InvalidPiece, int _score=0)
+        : pos(_pos), score(_score)
+    {}
+
+    bool operator <(const PieceScore& r) const
+    {
+        return score < r.score;
+    }
+
+    bool operator >(const PieceScore& r) const
+    {
+        return score > r.score;
+    }
+};
+
+class GomokuAI
 {
     public:
-        /** Default constructor */
-        GomokuAI(wxGomokuFrame *_frame, GomokuBoard *_board = nullptr, GomokuGame *_game = nullptr, int _difficulty=1);
+        GomokuAI(GomokuBoard *board, int difficulty);
 
-        // bind gomoku game to bot
-        void initiate(GomokuBoard *_board, GomokuGame *_game);
-
-        // set AI level
-        void setDifficulty(int _difficulty);
-
-        // thread methods
-        virtual ExitCode Entry();
-        void WakeUp();
-
-        /** Default destructor */
-        virtual ~GomokuAI();
-
-
-
-        PiecePosition searchBest();
+        PiecePosition operator()(uint32_t& _node);
 
     protected:
-
-        void runThread();
+        // generate posible points in a limit number
+        // blank_points have been calculated previously
+        std::vector<PieceScore> generatePoints(GomokuBoard *board, uint32_t limit);
+        // evaluate the whole situation (for leaf node)
+        int evaluateSituation(GomokuBoard *board, int alpha, int beta);
         // return score under the ideal strategy
         int dfSearchScore(GomokuBoard *board, int ply, int alpha, int beta);
 
     private:
         int max_depth;
-        wxGomokuFrame *main_frame;
         GomokuBoard *gomoku_board;
-        GomokuGame *gomoku_game;
-        int difficulty;
-
-        wxMutex m;
-        wxCondition *cond;
         uint32_t node;
-
+        std::vector<PiecePosition> blank_points;
 };
 
 #endif // GOMOKUAI_H

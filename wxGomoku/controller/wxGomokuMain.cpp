@@ -46,7 +46,7 @@ wxGomokuFrame::wxGomokuFrame(wxFrame *parent)
 #endif
     canvas->setBoard(&gomoku_board);
     gomoku_game.clear();
-    gomoku_bot = new GomokuAI(this, &gomoku_board, &gomoku_game, 3);
+    gomoku_bot = new GomokuBot(this, &gomoku_board, &gomoku_game, 3);
     gomoku_bot->Run();
 }
 

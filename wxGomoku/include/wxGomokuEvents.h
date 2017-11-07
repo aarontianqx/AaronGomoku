@@ -9,8 +9,7 @@
 #define WXGOMOKUEVENTS_H
 
 #include <wx/event.h>
-#include "gomoku_global.h"
-#include "GomokuElements.h"
+#include "GomokuPiece.h"
 
 class wxGomokuEvent : public wxEvent
 {

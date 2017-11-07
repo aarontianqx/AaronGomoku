@@ -6,8 +6,7 @@
  **************************************************************/
 
 #include <wx/geometry.h>
-#include <wx/dc.h>
-#include <wx/dcclient.h>
+#include <wx/dcbuffer.h>
 #include "GlobalLoader.h"
 #include "wxGomokuCanvas.h"
 #include "wxGomokuMain.h"
@@ -15,7 +14,6 @@
 BEGIN_EVENT_TABLE( wxGomokuCanvas, wxPanel )
     EVT_MOTION( wxGomokuCanvas::OnMouseMove )
     EVT_LEFT_DOWN( wxGomokuCanvas::OnMouseDown )
-    EVT_ERASE_BACKGROUND( wxGomokuCanvas::OnEraseBackground )
     EVT_PAINT( wxGomokuCanvas::OnPaint )
 END_EVENT_TABLE()
 
@@ -53,8 +51,8 @@ wxGomokuCanvas::~wxGomokuCanvas()
 wxPoint wxGomokuCanvas::_PiecePositiononCanvas(PiecePosition _pos, int radius)
 {
     assert(_pos.isLegal());
-    return wxPoint( GridStartPosition +_pos.x * GridSideLength - radius,
-                    GridStartPosition +_pos.y * GridSideLength - radius);
+    return wxPoint( GridStartPosition +_pos.getX() * GridSideLength - radius,
+                    GridStartPosition +_pos.getY() * GridSideLength - radius);
 }
 
 PiecePosition wxGomokuCanvas::_PointtoPiecePosition(wxPoint _point)
@@ -65,8 +63,8 @@ PiecePosition wxGomokuCanvas::_PointtoPiecePosition(wxPoint _point)
                        (_point.y - _start) / GridSideLength );
     if (!pos.isLegal())
         return PiecePosition::InvalidPiece;
-    wxPoint2DInt target_point(GridStartPosition + pos.x * GridSideLength,
-                              GridStartPosition + pos.y * GridSideLength);
+    wxPoint2DInt target_point(GridStartPosition + pos.getX() * GridSideLength,
+                              GridStartPosition + pos.getY() * GridSideLength);
     double distance = target_point.GetDistance(wxPoint2DInt(_point));
     if (distance > _half)
         return PiecePosition::InvalidPiece;
@@ -78,7 +76,7 @@ void wxGomokuCanvas::OnMouseMove(wxMouseEvent &event)
 {
     // turn canvas coord to piece position
     PiecePosition mouse_pos = _PointtoPiecePosition(event.GetPosition());
-    if (mouse_pos == trace_piece || (mouse_pos.isLegal() && !board->at(mouse_pos).isBlank()))
+    if (mouse_pos == trace_piece || board->at(mouse_pos).isInvalid())
         return;
 
     wxGomokuEvent motion_event(mouse_pos, EVT_CANVAS_MOTION);
@@ -89,53 +87,47 @@ void wxGomokuCanvas::OnMouseDown(wxMouseEvent& event)
 {
     // turn canvas coord to piece position
     PiecePosition mouse_pos = _PointtoPiecePosition(event.GetPosition());
-    if (!mouse_pos.isLegal() || !board->at(mouse_pos).isBlank())
+    if (!board->at(mouse_pos).isBlank())
         return;
 
     wxGomokuEvent click_event(mouse_pos, EVT_CANVAS_CLICK);
     main_frame->ProcessWindowEvent(click_event);
 }
 
-void wxGomokuCanvas::OnEraseBackground(wxEraseEvent &event)
-{
-    wxDC *painter = event.GetDC();
-    painter->DrawBitmap(*boardPic, 0, 0);
-    painter->SetPen(wxPen(*wxBLACK, 2));
-    for (auto i=GridStartPosition; i<=GridEndPosition; i+=GridSideLength){
-        painter->DrawLine(GridStartPosition, i, GridEndPosition, i);
-        painter->DrawLine(i, GridStartPosition, i, GridEndPosition);
-    }
-    painter->SetBrush(*wxBLACK_BRUSH);
-    painter->DrawCircle(StarLeft, StarTop, StarRadius);
-    painter->DrawCircle(StarRight, StarTop, StarRadius);
-    painter->DrawCircle(StarMiddleX, StarMiddleY, StarRadius);
-    painter->DrawCircle(StarLeft, StarDown, StarRadius);
-    painter->DrawCircle(StarRight, StarDown, StarRadius);
-
-    // for debugging
-/*    wxSize panelSize = GetParent()->GetSize();
-    wxPoint position = GetParent()->GetPosition();
-    wxString status;
-    status << "panel position: (" << position.x << ", " << position.y << ") ";
-    status << "size: (" << panelSize.GetWidth() << ", " << panelSize.GetHeight() << ")";
-    main_frame->GetStatusBar()->SetStatusText(status);*/
-}
-
 void wxGomokuCanvas::OnPaint(wxPaintEvent &event)
 {
-    wxClientDC painter(this);
-    painter.SetBrush(*wxTRANSPARENT_BRUSH);
+    wxBufferedPaintDC painter(this);
 
-    for (int x=0; x<TABLESIZE; x++)
-        for (int y=0; y<TABLESIZE; y++){
-            PieceColor color = board->at(x, y);
-            if (!color.isBlank())
-                painter.DrawBitmap(color.isBlack()?*blackPic:*whitePic,
-                                   _PiecePositiononCanvas(PiecePosition(x, y), PieceRadius));
-        }
+    // draw background
+    painter.DrawBitmap(*boardPic, 0, 0);
+    painter.SetPen(wxPen(*wxBLACK, 2));
+    for (auto i=GridStartPosition; i<=GridEndPosition; i+=GridSideLength){
+        painter.DrawLine(GridStartPosition, i, GridEndPosition, i);
+        painter.DrawLine(i, GridStartPosition, i, GridEndPosition);
+    }
+    painter.SetBrush(*wxBLACK_BRUSH);
+    painter.DrawCircle(StarLeft, StarTop, StarRadius);
+    painter.DrawCircle(StarRight, StarTop, StarRadius);
+    painter.DrawCircle(StarMiddleX, StarMiddleY, StarRadius);
+    painter.DrawCircle(StarLeft, StarDown, StarRadius);
+    painter.DrawCircle(StarRight, StarDown, StarRadius);
+
+    // draw pieces
+    painter.SetBrush(*wxTRANSPARENT_BRUSH);
+    for(PiecePosition pos: GomokuBoard::validPoints()){
+        PieceColor color = board->at(pos);
+        if (color.isBlack())
+            painter.DrawBitmap(*blackPic, _PiecePositiononCanvas(pos, PieceRadius));
+        else if (color.isWhite())
+            painter.DrawBitmap(*whitePic, _PiecePositiononCanvas(pos, PieceRadius));
+    }
+
+    // draw trace piece
     if (trace_piece.isLegal() && board->at(trace_piece).isBlank())
         painter.DrawBitmap(board->nextColor().isBlack()?*blackPic:*whitePic,
                            _PiecePositiononCanvas(trace_piece, PieceRadius));
+
+    // mark last piece
     painter.SetBrush(*wxGREY_BRUSH);
     if (last_piece.isLegal())
         painter.DrawCircle(_PiecePositiononCanvas(last_piece, 1), 4);

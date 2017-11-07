@@ -49,25 +49,25 @@ auto GomokuGame::tryAcquireLock()
     return TryLock_T(m, std::chrono::milliseconds(10));
 }
 
-bool GomokuGame::tryPut(int x, int y, PieceColor color)
+bool GomokuGame::tryPut(PiecePosition pos, PieceColor color)
 {
-    if (!PiecePosition::isLegal(x, y) || pboard->at(x, y) != PieceColor::BLANK || color != pboard->nextColor())
+    if (!pboard->at(pos).isBlank() || color != pboard->nextColor())
         return false;
-    pboard->put(x, y);
-    if (pboard->pieceCount() == TABLESIZE * TABLESIZE){
+    pboard->put(pos);
+    if (pboard->pieceCount() == 225){
         winner = PieceColor::WHITE;
         game_active = false;
     }
-    else if (pboard->checkWin(x, y, color)){
+    else if (pboard->checkWin(pos, color)){
         winner = color;
         game_active = false;
     }
     return true;
 }
 
-bool GomokuGame::tryPut(PiecePosition p, PieceColor color)
+bool GomokuGame::tryPut(int x, int y, PieceColor color)
 {
-    return tryPut(p.x, p.y, color);
+    return tryPut(PiecePosition(x, y), color);
 }
 
 bool GomokuGame::tryWithdraw()

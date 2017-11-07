@@ -9,7 +9,7 @@
 #define GOMOKUGAME_H_INCLUDED
 
 #include <mutex>
-#include "GomokuElements.h"
+#include "GomokuBoard.h"
 
 
 enum PlayerRole
@@ -35,9 +35,9 @@ public:
     PlayerRole nextRole() const;
     TryLock_T tryAcquireLock();
 
-    // all these functions must be called under lock
+    // all these functions should be called under lock
+    bool tryPut(PiecePosition pos, PieceColor color);
     bool tryPut(int x, int y, PieceColor color);
-    bool tryPut(PiecePosition p, PieceColor color);
     bool tryWithdraw();
 
 private:

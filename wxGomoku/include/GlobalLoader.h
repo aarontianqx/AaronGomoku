@@ -31,6 +31,8 @@ class GlobalLoader
         virtual ~GlobalLoader();
 
     private:
+        static wxJPEGHandler jpeg_handler;
+        static wxPNGHandler png_handler;
         static std::map<std::string, int32_t> configs;
         static std::map<std::string, wxBitmap*> pictures;
 };

@@ -13,10 +13,9 @@
 #include "wxGomokuApp.h"
 #include "wxGUIFrame.h"
 #include "wxGomokuCanvas.h"
-#include "gomoku_global.h"
 #include "GomokuGame.h"
 #include "PlayerInfo.h"
-#include "GomokuAI.h"
+#include "GomokuBot.h"
 
 
 class wxGomokuFrame: public wxGUIFrame
@@ -45,7 +44,7 @@ class wxGomokuFrame: public wxGUIFrame
         GomokuBoard gomoku_board;
         GomokuGame gomoku_game;
         PlayerInfo player[2];
-        GomokuAI *gomoku_bot;
+        GomokuBot *gomoku_bot;
 };
 
 #endif // WXGOMOKUMAIN_H

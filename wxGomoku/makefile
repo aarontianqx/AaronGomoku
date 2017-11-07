@@ -24,6 +24,7 @@ core::
 controller::
 		@echo "Compiling Controller..."
 		$(CC) -c controller/GlobalLoader.cpp -o $(OBJDIR)/GlobalLoader.o $(INC) $(CTAGS)
+		$(CC) -c controller/GomokuBot.cpp -o $(OBJDIR)/GomokuBot.o $(INC) $(CTAGS)
 		$(CC) -c controller/wxGomokuMain.cpp -o $(OBJDIR)/wxGomokuMain.o $(INC) $(CTAGS)
 		$(CC) -c controller/wxGomokuApp.cpp -o $(OBJDIR)/wxGomokuApp.o $(INC) $(CTAGS)
 

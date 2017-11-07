@@ -8,7 +8,6 @@
 #ifndef WXGOMOKUCANVAS_H
 #define WXGOMOKUCANVAS_H
 
-#include "gomoku_global.h"
 #include "GomokuGame.h"
 #include <wx/panel.h>
 #include <wx/bitmap.h>
@@ -31,7 +30,6 @@ class wxGomokuCanvas: public wxPanel
     protected:
         void OnMouseMove(wxMouseEvent& event);
         void OnPaint(wxPaintEvent& event);
-        void OnEraseBackground(wxEraseEvent& event);
         void OnMouseDown(wxMouseEvent& event);
 
         wxPoint _PiecePositiononCanvas(PiecePosition _pos, int radius);
